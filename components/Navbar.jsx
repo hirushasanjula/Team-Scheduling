@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Button } from './ui/button';
 import { RxDashboard } from "react-icons/rx";
 import { 
@@ -23,62 +23,179 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchAttempts, setFetchAttempts] = useState(0);
+  const [lastError, setLastError] = useState(null);
   const router = useRouter();
+  const pathname = usePathname();
+
+  console.log('🚀 Navbar render - pathname:', pathname, 'user:', user, 'isLoading:', isLoading);
 
   useEffect(() => {
-    const fetchUser = async () => {
+    console.log('📍 Navbar useEffect triggered - pathname:', pathname);
+    
+    let isCancelled = false;
+    let retryTimeout;
+    
+    const fetchUser = async (attempt = 1) => {
+      if (isCancelled) return;
+      
+      console.log(`🔄 Fetch attempt ${attempt} - Starting...`);
+      setFetchAttempts(attempt);
+      
       try {
-        console.log('Navbar - Fetching /api/auth/verify');
+        console.log('📡 Making request to /api/auth/verify');
+        console.log('🍪 Document cookies:', document.cookie);
+        
+        const startTime = Date.now();
         const response = await fetch('/api/auth/verify', {
+          method: 'GET',
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
+            'X-Requested-With': 'XMLHttpRequest'
           },
         });
-        console.log('Navbar - Verify Response Status:', response.status);
-        const data = await response.json();
-        console.log('Navbar - Verify Response:', data);
-        if (response.ok && data.user) {
-          setUser(data.user);
+        
+        const responseTime = Date.now() - startTime;
+        console.log(`⏱️ API response took ${responseTime}ms`);
+        console.log('📈 Response status:', response.status);
+        console.log('📋 Response headers:', Object.fromEntries(response.headers));
+        
+        if (isCancelled) {
+          console.log('❌ Request cancelled');
+          return;
+        }
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ API Success - Data received:', data);
+          
+          if (data.user) {
+            console.log('👤 Setting user:', data.user);
+            setUser(data.user);
+            setLastError(null);
+          } else {
+            console.log('⚠️ No user in response');
+            setUser(null);
+            setLastError('No user data in response');
+          }
         } else {
-          console.log('Navbar - No user found or error in response:', data.error || 'No user data');
+          const errorText = await response.text();
+          console.log('❌ API Error:', response.status, errorText);
+          
+          // Retry on 401/403 errors (auth issues)
+          if ((response.status === 401 || response.status === 403) && attempt < 3) {
+            console.log(`🔄 Retrying in 1s... (attempt ${attempt + 1})`);
+            retryTimeout = setTimeout(() => {
+              if (!isCancelled) {
+                fetchUser(attempt + 1);
+              }
+            }, 1000);
+            return;
+          }
+          
           setUser(null);
+          setLastError(`HTTP ${response.status}: ${errorText}`);
         }
       } catch (error) {
-        console.error('Navbar - Error verifying token:', error.message, error.stack);
+        console.error('💥 Fetch error:', error);
+        
+        // Retry on network errors
+        if (attempt < 3) {
+          console.log(`🔄 Retrying due to error in 2s... (attempt ${attempt + 1})`);
+          retryTimeout = setTimeout(() => {
+            if (!isCancelled) {
+              fetchUser(attempt + 1);
+            }
+          }, 2000);
+          return;
+        }
+        
         setUser(null);
+        setLastError(error.message);
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) {
+          console.log('🏁 Fetch completed, setting loading to false');
+          setIsLoading(false);
+        }
       }
     };
-    fetchUser();
-  }, []);
 
-  const handleLogout = () => {
-    fetch('/api/auth/logout', { method: 'POST' })
-      .then(() => {
-        setUser(null);
-        setIsMobileMenuOpen(false);
-        setIsUserMenuOpen(false);
-        router.push('/login');
-      })
-      .catch((error) => {
-        console.error('Logout error:', error);
-        router.push('/login');
+    fetchUser();
+    
+    return () => {
+      console.log('🧹 Cleanup - cancelling requests');
+      isCancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
+  }, [pathname]); // Add pathname as dependency to refetch on route changes
+
+  const handleLogout = async () => {
+    console.log('🚪 Logout triggered');
+    try {
+      await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'include'
       });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setUser(null);
+      setIsMobileMenuOpen(false);
+      setIsUserMenuOpen(false);
+      router.push('/login');
+    }
   };
 
+  // Always show navbar structure, but conditionally show content
+  const shouldShowNavbar = user && (user.role === 'EMPLOYEE' || user.role === 'MANAGER');
+  
+  console.log('🎯 Render decision - shouldShowNavbar:', shouldShowNavbar, 'isLoading:', isLoading);
+
   if (isLoading) {
-    console.log('Navbar - Still loading session');
-    return null; 
+    console.log('⏳ Rendering loading state');
+    return (
+      <nav className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <Link href="/" className="flex items-center space-x-2">
+                <span className="text-xl font-bold text-gray-900">
+                  Team Scheduling
+                </span>
+              </Link>
+            </div>
+            <div className="hidden md:flex items-center space-x-4">
+              <div className="animate-pulse bg-gray-200 h-8 w-24 rounded"></div>
+              <div className="text-xs text-gray-500">
+                Loading... (Attempt {fetchAttempts})
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Debug info */}
+        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-xs">
+          <div>🔍 Debug: Loading user data... Attempt: {fetchAttempts}</div>
+          {lastError && <div className="text-red-600">Error: {lastError}</div>}
+        </div>
+      </nav>
+    );
   }
 
-  if (!user || (user.role !== 'EMPLOYEE' && user.role !== 'MANAGER')) {
-    console.log('Navbar - Not rendering: user:', user, 'role:', user?.role);
-    return null;
+  if (!shouldShowNavbar) {
+    console.log('🚫 Not rendering navbar - user:', user, 'role:', user?.role);
+    return (
+      <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-xs text-red-600">
+        🔍 Debug: No user or unauthorized role. User: {user ? `${user.name} (${user.role})` : 'null'}
+        {lastError && <div>Last Error: {lastError}</div>}
+      </div>
+    );
   }
 
-  console.log('Navbar - Rendering for role:', user.role, 'user:', user);
+  console.log('✅ Rendering full navbar for user:', user.name);
 
   const navigation = [
     { name: 'Home', href: '/', icon: Home, show: true },
@@ -87,11 +204,6 @@ export default function Navbar() {
     { name: 'Time Tracking', href: '/time-tracking', icon: Timer, show: true },
     { name: 'Employees', href: '/employees', icon: Users, show: user?.role === 'MANAGER' },
     { name: 'Company', href: '/company', icon: Building2, show: user?.role === 'MANAGER' },
-  ];
-
-  const authLinks = [
-    { name: 'Login', href: '/login', show: !user },
-    { name: 'Register', href: '/register', show: !user },
   ];
 
   return (
@@ -106,6 +218,7 @@ export default function Navbar() {
                 </span>
               </Link>
             </div>
+            
             <div className="hidden md:flex items-center space-x-1">
               {navigation.filter(item => item.show).map((item) => (
                 <Link
@@ -117,81 +230,67 @@ export default function Navbar() {
                   <span className="font-medium">{item.name}</span>
                 </Link>
               ))}
-              {authLinks.filter(item => item.show).map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className="px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:scale-105"
-                >
-                  {item.name === 'Login' ? (
-                    <span className="text-gray-700 hover:text-blue-600">Login</span>
-                  ) : (
-                    <span className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-purple-700">
-                      Register
-                    </span>
-                  )}
-                </Link>
-              ))}
             </div>
-            {user && (
-              <div className="hidden md:flex items-center space-x-4">
-                <div className="relative">
-                  <button
-                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex-shrink-0">
-                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                        <span className="text-sm font-medium text-white">
-                          {user.name?.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
+
+            <div className="hidden md:flex items-center space-x-4">
+              <div className="relative">
+                <button
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-medium text-white">
+                        {user.name?.charAt(0).toUpperCase()}
+                      </span>
                     </div>
-                    <div className="text-left">
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-gray-900">
+                      {user.name}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {user.companyName} • {user.role}
+                    </div>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-gray-400" />
+                </button>
+                
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                    <div className="px-4 py-3 border-b border-gray-100">
                       <div className="text-sm font-medium text-gray-900">
                         {user.name}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-sm text-gray-500">
+                        {user.email}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
                         {user.companyName} • {user.role}
                       </div>
                     </div>
-                    <ChevronDown className="h-4 w-4 text-gray-400" />
-                  </button>
-                  {isUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                      <div className="px-4 py-3 border-b border-gray-100">
-                        <div className="text-sm font-medium text-gray-900">
-                          {user.name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {user.email}
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          {user.companyName} • {user.role}
-                        </div>
-                      </div>
-                      <Link
-                        href="/profile"
-                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsUserMenuOpen(false)}
+                    <Link
+                      href="/profile"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsUserMenuOpen(false)}
+                    >
+                      <User className="h-4 w-4 mr-3" />
+                      Profile Settings
+                    </Link>
+                    <div className="border-t border-gray-100 mt-1 pt-1">
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
-                        <User className="h-4 w-4 mr-3" />
-                        Profile Settings
-                      </Link>
-                      <div className="border-t border-gray-100 mt-1 pt-1">
-                        <button
-                          onClick={handleLogout}
-                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        >
-                          <LogOut className="h-4 w-4 mr-3" />
-                          Sign Out
-                        </button>
-                      </div>
+                        <LogOut className="h-4 w-4 mr-3" />
+                        Sign Out
+                      </button>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+
             <div className="md:hidden">
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -202,6 +301,8 @@ export default function Navbar() {
             </div>
           </div>
         </div>
+
+        {/* Mobile menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-gray-200 bg-white">
             <div className="px-4 py-3 space-y-1">
@@ -216,67 +317,58 @@ export default function Navbar() {
                   <span className="font-medium">{item.name}</span>
                 </Link>
               ))}
-              {authLinks.filter(item => item.show).map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`block px-3 py-3 rounded-lg font-medium transition-all ${
-                    item.name === 'Login' ? 'text-gray-700 hover:text-blue-600 hover:bg-blue-50' : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white text-center hover:from-blue-600 hover:to-purple-700'
-                  }`}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  {item.name}
-                </Link>
-              ))}
-              {user && (
-                <div className="border-t border-gray-200 mt-4 pt-4">
-                  <div className="flex items-center space-x-3 px-3 py-2">
-                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-white">
-                        {user.name?.charAt(0).toUpperCase()}
-                      </span>
+              
+              <div className="border-t border-gray-200 mt-4 pt-4">
+                <div className="flex items-center space-x-3 px-3 py-2">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-medium text-white">
+                      {user.name?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {user.name}
                     </div>
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {user.name}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {user.companyName} • {user.role}
-                      </div>
+                    <div className="text-xs text-gray-500">
+                      {user.companyName} • {user.role}
                     </div>
                   </div>
-                  <Link
-                    href="/profile"
-                    className="flex items-center space-x-3 px-3 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all mt-2"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    <User className="h-5 w-5" />
-                    <span className="font-medium">Profile Settings</span>
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center w-full px-3 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all mt-2"
-                  >
-                    <LogOut className="h-5 w-5 mr-3" />
-                    <span className="font-medium">Sign Out</span>
-                  </button>
                 </div>
-              )}
+                <Link
+                  href="/profile"
+                  className="flex items-center space-x-3 px-3 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all mt-2"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <User className="h-5 w-5" />
+                  <span className="font-medium">Profile Settings</span>
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center w-full px-3 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all mt-2"
+                >
+                  <LogOut className="h-5 w-5 mr-3" />
+                  <span className="font-medium">Sign Out</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
       </nav>
+
+      {/* Overlay for mobile menu */}
       {isMobileMenuOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-25 z-40 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
-        ></div>
+        />
       )}
+      
+      {/* Overlay for user menu */}
       {isUserMenuOpen && (
         <div
           className="fixed inset-0 z-40"
           onClick={() => setIsUserMenuOpen(false)}
-        ></div>
+        />
       )}
     </>
   );
