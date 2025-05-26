@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-export const runtime = 'experimental-edge'; // Updated to experimental-edge
+export const runtime = 'experimental-edge';
 
 export function middleware(req) {
   console.log('Middleware running in runtime:', process.env.NEXT_RUNTIME || 'experimental-edge');
@@ -21,8 +21,9 @@ export function middleware(req) {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
+      'Cookie': `token=${token}`, // Explicitly set the Cookie header
     },
-    credentials: 'include',
+    credentials: 'include', // Keep for browser compatibility
   })
     .then((response) => {
       console.log('Middleware - Verify response status:', response.status);
