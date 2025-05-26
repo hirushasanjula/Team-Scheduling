@@ -24,30 +24,17 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [fetchAttempts, setFetchAttempts] = useState(0);
-  const [lastError, setLastError] = useState(null);
   const router = useRouter();
   const pathname = usePathname();
 
-  console.log('🚀 Navbar render - pathname:', pathname, 'user:', user, 'isLoading:', isLoading);
-
   useEffect(() => {
-    console.log('📍 Navbar useEffect triggered - pathname:', pathname);
-    
     let isCancelled = false;
     let retryTimeout;
     
     const fetchUser = async (attempt = 1) => {
       if (isCancelled) return;
       
-      console.log(`🔄 Fetch attempt ${attempt} - Starting...`);
-      setFetchAttempts(attempt);
-      
       try {
-        console.log('📡 Making request to /api/auth/verify');
-        console.log('🍪 Document cookies:', document.cookie);
-        
-        const startTime = Date.now();
         const response = await fetch('/api/auth/verify', {
           method: 'GET',
           credentials: 'include',
@@ -58,41 +45,20 @@ export default function Navbar() {
           },
         });
         
-        const responseTime = Date.now() - startTime;
-        console.log(`⏱️ API response took ${responseTime}ms`);
-        console.log('📈 Response status:', response.status);
-        console.log('📋 Response headers:', Object.fromEntries(response.headers));
-        
-        if (isCancelled) {
-          console.log('❌ Request cancelled');
-          return;
-        }
+        if (isCancelled) return;
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ API Success - Data received:', data);
-          
           if (data.user) {
-            console.log('👤 Setting user:', data.user);
             setUser(data.user);
-            setLastError(null);
           } else {
-            console.log('⚠️ No user in response');
             setUser(null);
-            setLastError('No user data in response');
           }
         } else {
-          console.log('❌ API Error:', response.status);
-          
-          // Don't retry for auth errors when we want to show navbar anyway
           if (response.status === 401 || response.status === 403) {
-            console.log('🔓 User not authenticated, but showing navbar anyway');
             setUser(null);
-            setLastError(null);
           } else {
-            // Retry on other errors
             if (attempt < 3) {
-              console.log(`🔄 Retrying in 1s... (attempt ${attempt + 1})`);
               retryTimeout = setTimeout(() => {
                 if (!isCancelled) {
                   fetchUser(attempt + 1);
@@ -100,18 +66,11 @@ export default function Navbar() {
               }, 1000);
               return;
             }
-            
-            const errorText = await response.text();
             setUser(null);
-            setLastError(`HTTP ${response.status}: ${errorText}`);
           }
         }
       } catch (error) {
-        console.error('💥 Fetch error:', error);
-        
-        // Retry on network errors
         if (attempt < 3) {
-          console.log(`🔄 Retrying due to error in 2s... (attempt ${attempt + 1})`);
           retryTimeout = setTimeout(() => {
             if (!isCancelled) {
               fetchUser(attempt + 1);
@@ -119,12 +78,9 @@ export default function Navbar() {
           }, 2000);
           return;
         }
-        
         setUser(null);
-        setLastError(error.message);
       } finally {
         if (!isCancelled) {
-          console.log('🏁 Fetch completed, setting loading to false');
           setIsLoading(false);
         }
       }
@@ -133,7 +89,6 @@ export default function Navbar() {
     fetchUser();
     
     return () => {
-      console.log('🧹 Cleanup - cancelling requests');
       isCancelled = true;
       if (retryTimeout) {
         clearTimeout(retryTimeout);
@@ -142,14 +97,13 @@ export default function Navbar() {
   }, [pathname]);
 
   const handleLogout = async () => {
-    console.log('🚪 Logout triggered');
     try {
       await fetch('/api/auth/logout', { 
         method: 'POST',
         credentials: 'include'
       });
     } catch (error) {
-      console.error('Logout error:', error);
+      // Handle logout error silently
     } finally {
       setUser(null);
       setIsMobileMenuOpen(false);
@@ -158,10 +112,7 @@ export default function Navbar() {
     }
   };
 
-  console.log('🎯 Render decision - user:', user, 'isLoading:', isLoading);
-
   if (isLoading) {
-    console.log('⏳ Rendering loading state');
     return (
       <nav className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -175,9 +126,6 @@ export default function Navbar() {
             </div>
             <div className="hidden md:flex items-center space-x-4">
               <div className="animate-pulse bg-gray-200 h-8 w-24 rounded"></div>
-              <div className="text-xs text-gray-500">
-                Loading...
-              </div>
             </div>
           </div>
         </div>
@@ -185,17 +133,14 @@ export default function Navbar() {
     );
   }
 
-  // Define navigation based on user authentication status
   const getNavigation = () => {
     if (!user) {
-      // Public navigation for unauthenticated users
       return [
         { name: 'Home', href: '/', icon: Home, show: true },
         { name: 'About', href: '/about', icon: Building2, show: true },
       ];
     }
     
-    // Authenticated navigation
     return [
       { name: 'Home', href: '/', icon: Home, show: true },
       { name: 'Dashboard', href: '/dashboard', icon: RxDashboard, show: true },
@@ -207,8 +152,6 @@ export default function Navbar() {
   };
 
   const navigation = getNavigation();
-
-  console.log('✅ Rendering navbar - authenticated:', !!user);
 
   return (
     <>
@@ -238,7 +181,6 @@ export default function Navbar() {
 
             <div className="hidden md:flex items-center space-x-4">
               {user ? (
-                // Authenticated user menu
                 <div className="relative">
                   <button
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -296,7 +238,6 @@ export default function Navbar() {
                   )}
                 </div>
               ) : (
-                // Unauthenticated user - show login button
                 <div className="flex items-center space-x-2">
                   <Link href="/login">
                     <Button variant="outline" size="sm" className="flex items-center space-x-2">
@@ -343,7 +284,6 @@ export default function Navbar() {
               
               <div className="border-t border-gray-200 mt-4 pt-4">
                 {user ? (
-                  // Authenticated mobile user menu
                   <>
                     <div className="flex items-center space-x-3 px-3 py-2">
                       <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
@@ -377,7 +317,6 @@ export default function Navbar() {
                     </button>
                   </>
                 ) : (
-                  // Unauthenticated mobile menu
                   <div className="space-y-2">
                     <Link
                       href="/login"
