@@ -9,14 +9,25 @@ export function middleware(req) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // Call the API route to verify the token
-  return fetch(new URL('/api/auth/verify', req.url), {
+  // Use environment variable for the app's base URL
+  const APP_URL = process.env.RENDER_EXTERNAL_URL || 'https://your-app.onrender.com';
+  const verifyUrl = new URL('/api/auth/verify', APP_URL);
+
+  console.log('Middleware - Token:', token);
+  console.log('Middleware - Fetching:', verifyUrl.toString());
+
+  // Perform the fetch request
+  return fetch(verifyUrl, {
     method: 'GET',
     headers: {
       'Cookie': `token=${token}`,
+      'Content-Type': 'application/json',
     },
   })
-    .then((response) => response.json())
+    .then((response) => {
+      console.log('Middleware - Verify response status:', response.status);
+      return response.json();
+    })
     .then((result) => {
       console.log('Middleware - Token Verification Result:', result);
 
@@ -30,7 +41,7 @@ export function middleware(req) {
     })
     .catch((error) => {
       console.error('Middleware - Error verifying token:', error);
-      console.log('Middleware - Redirecting to /login due to:', error.message);
+      console.log('Middleware - Redirecting to /login due to:', error.message || 'Unknown fetch error');
       return NextResponse.redirect(new URL('/login', req.url));
     });
 }
