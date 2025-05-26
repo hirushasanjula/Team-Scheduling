@@ -15,7 +15,8 @@ import {
   Building2, 
   ChevronDown,
   User,
-  LogOut
+  LogOut,
+  LogIn
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -81,22 +82,29 @@ export default function Navbar() {
             setLastError('No user data in response');
           }
         } else {
-          const errorText = await response.text();
-          console.log('❌ API Error:', response.status, errorText);
+          console.log('❌ API Error:', response.status);
           
-          // Retry on 401/403 errors (auth issues)
-          if ((response.status === 401 || response.status === 403) && attempt < 3) {
-            console.log(`🔄 Retrying in 1s... (attempt ${attempt + 1})`);
-            retryTimeout = setTimeout(() => {
-              if (!isCancelled) {
-                fetchUser(attempt + 1);
-              }
-            }, 1000);
-            return;
+          // Don't retry for auth errors when we want to show navbar anyway
+          if (response.status === 401 || response.status === 403) {
+            console.log('🔓 User not authenticated, but showing navbar anyway');
+            setUser(null);
+            setLastError(null);
+          } else {
+            // Retry on other errors
+            if (attempt < 3) {
+              console.log(`🔄 Retrying in 1s... (attempt ${attempt + 1})`);
+              retryTimeout = setTimeout(() => {
+                if (!isCancelled) {
+                  fetchUser(attempt + 1);
+                }
+              }, 1000);
+              return;
+            }
+            
+            const errorText = await response.text();
+            setUser(null);
+            setLastError(`HTTP ${response.status}: ${errorText}`);
           }
-          
-          setUser(null);
-          setLastError(`HTTP ${response.status}: ${errorText}`);
         }
       } catch (error) {
         console.error('💥 Fetch error:', error);
@@ -131,7 +139,7 @@ export default function Navbar() {
         clearTimeout(retryTimeout);
       }
     };
-  }, [pathname]); // Add pathname as dependency to refetch on route changes
+  }, [pathname]);
 
   const handleLogout = async () => {
     console.log('🚪 Logout triggered');
@@ -150,10 +158,7 @@ export default function Navbar() {
     }
   };
 
-  // Always show navbar structure, but conditionally show content
-  const shouldShowNavbar = user && (user.role === 'EMPLOYEE' || user.role === 'MANAGER');
-  
-  console.log('🎯 Render decision - shouldShowNavbar:', shouldShowNavbar, 'isLoading:', isLoading);
+  console.log('🎯 Render decision - user:', user, 'isLoading:', isLoading);
 
   if (isLoading) {
     console.log('⏳ Rendering loading state');
@@ -171,40 +176,39 @@ export default function Navbar() {
             <div className="hidden md:flex items-center space-x-4">
               <div className="animate-pulse bg-gray-200 h-8 w-24 rounded"></div>
               <div className="text-xs text-gray-500">
-                Loading... (Attempt {fetchAttempts})
+                Loading...
               </div>
             </div>
           </div>
-        </div>
-        {/* Debug info */}
-        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-xs">
-          <div>🔍 Debug: Loading user data... Attempt: {fetchAttempts}</div>
-          {lastError && <div className="text-red-600">Error: {lastError}</div>}
         </div>
       </nav>
     );
   }
 
-  if (!shouldShowNavbar) {
-    console.log('🚫 Not rendering navbar - user:', user, 'role:', user?.role);
-    return (
-      <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-xs text-red-600">
-        🔍 Debug: No user or unauthorized role. User: {user ? `${user.name} (${user.role})` : 'null'}
-        {lastError && <div>Last Error: {lastError}</div>}
-      </div>
-    );
-  }
+  // Define navigation based on user authentication status
+  const getNavigation = () => {
+    if (!user) {
+      // Public navigation for unauthenticated users
+      return [
+        { name: 'Home', href: '/', icon: Home, show: true },
+        { name: 'About', href: '/about', icon: Building2, show: true },
+      ];
+    }
+    
+    // Authenticated navigation
+    return [
+      { name: 'Home', href: '/', icon: Home, show: true },
+      { name: 'Dashboard', href: '/dashboard', icon: RxDashboard, show: true },
+      { name: 'Shifts', href: '/shifts', icon: Calendar, show: true },
+      { name: 'Time Tracking', href: '/time-tracking', icon: Timer, show: true },
+      { name: 'Employees', href: '/employees', icon: Users, show: user?.role === 'MANAGER' },
+      { name: 'Company', href: '/company', icon: Building2, show: user?.role === 'MANAGER' },
+    ];
+  };
 
-  console.log('✅ Rendering full navbar for user:', user.name);
+  const navigation = getNavigation();
 
-  const navigation = [
-    { name: 'Home', href: '/', icon: Home, show: true },
-    { name: 'Dashboard', href: '/dashboard', icon: RxDashboard, show: true },
-    { name: 'Shifts', href: '/shifts', icon: Calendar, show: true },
-    { name: 'Time Tracking', href: '/time-tracking', icon: Timer, show: true },
-    { name: 'Employees', href: '/employees', icon: Users, show: user?.role === 'MANAGER' },
-    { name: 'Company', href: '/company', icon: Building2, show: user?.role === 'MANAGER' },
-  ];
+  console.log('✅ Rendering navbar - authenticated:', !!user);
 
   return (
     <>
@@ -233,62 +237,81 @@ export default function Navbar() {
             </div>
 
             <div className="hidden md:flex items-center space-x-4">
-              <div className="relative">
-                <button
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-white">
-                        {user.name?.charAt(0).toUpperCase()}
-                      </span>
+              {user ? (
+                // Authenticated user menu
+                <div className="relative">
+                  <button
+                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                    className="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex-shrink-0">
+                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium text-white">
+                          {user.name?.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-left">
-                    <div className="text-sm font-medium text-gray-900">
-                      {user.name}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {user.companyName} • {user.role}
-                    </div>
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-gray-400" />
-                </button>
-                
-                {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                    <div className="px-4 py-3 border-b border-gray-100">
+                    <div className="text-left">
                       <div className="text-sm font-medium text-gray-900">
                         {user.name}
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {user.email}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
+                      <div className="text-xs text-gray-500">
                         {user.companyName} • {user.role}
                       </div>
                     </div>
-                    <Link
-                      href="/profile"
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                      onClick={() => setIsUserMenuOpen(false)}
-                    >
-                      <User className="h-4 w-4 mr-3" />
-                      Profile Settings
-                    </Link>
-                    <div className="border-t border-gray-100 mt-1 pt-1">
-                      <button
-                        onClick={handleLogout}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                  </button>
+                  
+                  {isUserMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      <div className="px-4 py-3 border-b border-gray-100">
+                        <div className="text-sm font-medium text-gray-900">
+                          {user.name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {user.email}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {user.companyName} • {user.role}
+                        </div>
+                      </div>
+                      <Link
+                        href="/profile"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        onClick={() => setIsUserMenuOpen(false)}
                       >
-                        <LogOut className="h-4 w-4 mr-3" />
-                        Sign Out
-                      </button>
+                        <User className="h-4 w-4 mr-3" />
+                        Profile Settings
+                      </Link>
+                      <div className="border-t border-gray-100 mt-1 pt-1">
+                        <button
+                          onClick={handleLogout}
+                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <LogOut className="h-4 w-4 mr-3" />
+                          Sign Out
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              ) : (
+                // Unauthenticated user - show login button
+                <div className="flex items-center space-x-2">
+                  <Link href="/login">
+                    <Button variant="outline" size="sm" className="flex items-center space-x-2">
+                      <LogIn className="h-4 w-4" />
+                      <span>Sign In</span>
+                    </Button>
+                  </Link>
+                  <Link href="/register">
+                    <Button size="sm" className="flex items-center space-x-2">
+                      <User className="h-4 w-4" />
+                      <span>Sign Up</span>
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
 
             <div className="md:hidden">
@@ -319,36 +342,61 @@ export default function Navbar() {
               ))}
               
               <div className="border-t border-gray-200 mt-4 pt-4">
-                <div className="flex items-center space-x-3 px-3 py-2">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-white">
-                      {user.name?.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">
-                      {user.name}
+                {user ? (
+                  // Authenticated mobile user menu
+                  <>
+                    <div className="flex items-center space-x-3 px-3 py-2">
+                      <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium text-white">
+                          {user.name?.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {user.name}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {user.companyName} • {user.role}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {user.companyName} • {user.role}
-                    </div>
+                    <Link
+                      href="/profile"
+                      className="flex items-center space-x-3 px-3 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all mt-2"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <User className="h-5 w-5" />
+                      <span className="font-medium">Profile Settings</span>
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center w-full px-3 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all mt-2"
+                    >
+                      <LogOut className="h-5 w-5 mr-3" />
+                      <span className="font-medium">Sign Out</span>
+                    </button>
+                  </>
+                ) : (
+                  // Unauthenticated mobile menu
+                  <div className="space-y-2">
+                    <Link
+                      href="/login"
+                      className="flex items-center space-x-3 px-3 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <LogIn className="h-5 w-5" />
+                      <span className="font-medium">Sign In</span>
+                    </Link>
+                    <Link
+                      href="/register"
+                      className="flex items-center space-x-3 px-3 py-3 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <User className="h-5 w-5" />
+                      <span className="font-medium">Sign Up</span>
+                    </Link>
                   </div>
-                </div>
-                <Link
-                  href="/profile"
-                  className="flex items-center space-x-3 px-3 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all mt-2"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  <User className="h-5 w-5" />
-                  <span className="font-medium">Profile Settings</span>
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center w-full px-3 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all mt-2"
-                >
-                  <LogOut className="h-5 w-5 mr-3" />
-                  <span className="font-medium">Sign Out</span>
-                </button>
+                )}
               </div>
             </div>
           </div>
