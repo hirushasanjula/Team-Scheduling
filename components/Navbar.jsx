@@ -176,24 +176,10 @@ export default function Navbar() {
             </div>
           </div>
         </div>
-        {/* Debug info */}
-        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-xs">
-          <div>🔍 Debug: Loading user data... Attempt: {fetchAttempts}</div>
-          {lastError && <div className="text-red-600">Error: {lastError}</div>}
-        </div>
       </nav>
     );
   }
 
-  if (!shouldShowNavbar) {
-    console.log('🚫 Not rendering navbar - user:', user, 'role:', user?.role);
-    return (
-      <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-xs text-red-600">
-        🔍 Debug: No user or unauthorized role. User: {user ? `${user.name} (${user.role})` : 'null'}
-        {lastError && <div>Last Error: {lastError}</div>}
-      </div>
-    );
-  }
 
   console.log('✅ Rendering full navbar for user:', user.name);
 
