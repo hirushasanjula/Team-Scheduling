@@ -328,7 +328,7 @@ export default function Navbar() {
                     </Link>
                     <Link
                       href="/register"
-                      className="flex items-center space-x-3 px-3 py-3 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all"
+                      className="flex items-center space-x-3 px-3 py-3 text-white bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg transition-all"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       <User className="h-5 w-5" />
