@@ -176,6 +176,11 @@ export default function Navbar() {
             </div>
           </div>
         </div>
+        {/* Debug info */}
+        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-xs">
+          <div>🔍 Debug: Loading user data... Attempt: {fetchAttempts}</div>
+          {lastError && <div className="text-red-600">Error: {lastError}</div>}
+        </div>
       </nav>
     );
   }
