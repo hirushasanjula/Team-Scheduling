@@ -23,120 +23,62 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
-  // Ensure component is mounted (client-side only)
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return; // Don't run on server
-    
-    let isCancelled = false;
-    
     const fetchUser = async () => {
       try {
-        console.log('Navbar - Fetching user data...');
-        
+        console.log('Navbar - Fetching /api/auth/verify');
         const response = await fetch('/api/auth/verify', {
-          method: 'GET',
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache',
           },
-          // Add a timeout to prevent hanging requests
         });
-
-        if (isCancelled) return; // Don't update state if component unmounted
-        
-        console.log('Navbar - Response status:', response.status);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Navbar - User data received:', data);
-          
-          if (data.user && !isCancelled) {
-            setUser(data.user);
-          } else if (!isCancelled) {
-            setUser(null);
-          }
-        } else if (!isCancelled) {
-          console.log('Navbar - Response not OK:', response.status);
+        console.log('Navbar - Verify Response Status:', response.status);
+        const data = await response.json();
+        console.log('Navbar - Verify Response:', data);
+        if (response.ok && data.user) {
+          setUser(data.user);
+        } else {
+          console.log('Navbar - No user found or error in response:', data.error || 'No user data');
           setUser(null);
         }
       } catch (error) {
-        if (!isCancelled) {
-          console.error('Navbar - Error fetching user:', error);
-          setUser(null);
-        }
+        console.error('Navbar - Error verifying token:', error.message, error.stack);
+        setUser(null);
       } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     };
-
     fetchUser();
-    
-    // Cleanup function
-    return () => {
-      isCancelled = true;
-    };
-  }, [mounted]); // Only depend on mounted state
+  }, []);
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { 
-        method: 'POST',
-        credentials: 'include'
+  const handleLogout = () => {
+    fetch('/api/auth/logout', { method: 'POST' })
+      .then(() => {
+        setUser(null);
+        setIsMobileMenuOpen(false);
+        setIsUserMenuOpen(false);
+        router.push('/login');
+      })
+      .catch((error) => {
+        console.error('Logout error:', error);
+        router.push('/login');
       });
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      setUser(null);
-      setIsMobileMenuOpen(false);
-      setIsUserMenuOpen(false);
-      router.push('/login');
-    }
   };
 
-  // Don't render anything on server-side or while mounting
-  if (!mounted) {
-    return null;
-  }
-
-  // Show loading state
   if (isLoading) {
-    return (
-      <nav className="bg-white shadow-lg border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-2">
-                <span className="text-xl font-bold text-gray-900">
-                  Team Scheduling
-                </span>
-              </Link>
-            </div>
-            <div className="hidden md:flex items-center space-x-4">
-              <div className="animate-pulse bg-gray-200 h-8 w-24 rounded"></div>
-            </div>
-          </div>
-        </div>
-      </nav>
-    );
+    console.log('Navbar - Still loading session');
+    return null; 
   }
 
-  // Don't render if no user or unauthorized role
   if (!user || (user.role !== 'EMPLOYEE' && user.role !== 'MANAGER')) {
-    console.log('Navbar - Not rendering: user =', user, 'role =', user?.role);
+    console.log('Navbar - Not rendering: user:', user, 'role:', user?.role);
     return null;
   }
 
-  console.log('Navbar - Rendering for user:', user.name, 'role:', user.role);
+  console.log('Navbar - Rendering for role:', user.role, 'user:', user);
 
   const navigation = [
     { name: 'Home', href: '/', icon: Home, show: true },
