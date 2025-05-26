@@ -240,13 +240,13 @@ export default function Navbar() {
               ) : (
                 <div className="flex items-center space-x-2">
                   <Link href="/login">
-                    <Button variant="outline" size="sm" className="flex items-center space-x-2">
+                    <Button variant="outline" size="sm" className="flex items-center space-x-2 cursor-pointer">
                       <LogIn className="h-4 w-4" />
                       <span>Sign In</span>
                     </Button>
                   </Link>
                   <Link href="/register">
-                    <Button size="sm" className="flex items-center space-x-2">
+                    <Button size="sm" className="flex items-center space-x-2 cursor-pointer bg-gradient-to-t from-blue-500 to-purple-600">
                       <User className="h-4 w-4" />
                       <span>Sign Up</span>
                     </Button>
