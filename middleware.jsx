@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 
+export const runtime = 'edge'; // Explicitly set to match logs
+
 export function middleware(req) {
-  console.log('Middleware running in runtime:', process.env.NEXT_RUNTIME || 'Node.js');
+  console.log('Middleware running in runtime:', process.env.NEXT_RUNTIME || 'edge');
   const token = req.cookies.get('token')?.value;
 
   if (!token || token === 'undefined' || token === 'null') {
@@ -26,7 +28,9 @@ export function middleware(req) {
       console.log('Middleware - Verify response status:', response.status);
       if (!response.ok) {
         console.log('Middleware - Response headers:', Object.fromEntries(response.headers));
-        throw new Error(`HTTP error! status: ${response.status}`);
+        return response.json().then((errorData) => {
+          throw new Error(`HTTP error! status: ${response.status}, body: ${JSON.stringify(errorData)}`);
+        });
       }
       return response.json();
     })
