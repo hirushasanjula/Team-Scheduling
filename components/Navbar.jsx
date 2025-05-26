@@ -137,7 +137,6 @@ export default function Navbar() {
     if (!user) {
       return [
         { name: 'Home', href: '/', icon: Home, show: true },
-        { name: 'About', href: '/about', icon: Building2, show: true },
       ];
     }
     
