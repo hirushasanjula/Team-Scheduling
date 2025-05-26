@@ -180,6 +180,15 @@ export default function Navbar() {
     );
   }
 
+  if (!shouldShowNavbar) {
+    console.log('🚫 Not rendering navbar - user:', user, 'role:', user?.role);
+    return (
+      <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-xs text-red-600">
+        🔍 Debug: No user or unauthorized role. User: {user ? `${user.name} (${user.role})` : 'null'}
+        {lastError && <div>Last Error: {lastError}</div>}
+      </div>
+    );
+  }
 
   console.log('✅ Rendering full navbar for user:', user.name);
 
