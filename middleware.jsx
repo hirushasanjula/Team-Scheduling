@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 
-export const runtime = 'edge'; // Explicitly set to match logs
+export const runtime = 'experimental-edge'; // Updated to experimental-edge
 
 export function middleware(req) {
-  console.log('Middleware running in runtime:', process.env.NEXT_RUNTIME || 'edge');
+  console.log('Middleware running in runtime:', process.env.NEXT_RUNTIME || 'experimental-edge');
   const token = req.cookies.get('token')?.value;
 
   if (!token || token === 'undefined' || token === 'null') {
